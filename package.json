@@ -1,0 +1,35 @@
+{
+  "name": "@masnagam/npls",
+  "version": "0.0.0",
+  "bin": {
+    "npls": "npls"
+  },
+  "author": "Masayuki Nagamachi <masayuki.nagamachi@gmail.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "minimist": "^1.2.0",
+    "mkdirp": "^0.5.1",
+    "rimraf": "^2.6.2"
+  },
+  "files": [
+    "npls"
+  ],
+  "devDependencies": {},
+  "description": "Run npm-ls anytime, anywhere",
+  "keywords": [
+    "npm",
+    "ls",
+    "npmls"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/masnagam/npls.git"
+  },
+  "bugs": {
+    "url": "https://github.com/masnagam/npls/issues"
+  },
+  "homepage": "https://github.com/masnagam/npls#readme"
+}

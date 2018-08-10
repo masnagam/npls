@@ -1,0 +1,166 @@
+#!/usr/bin/env node
+
+// This file is distributed under the Apache license 2.0.
+// See LICENSE file in the project root for details.
+
+'use strict';
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const child_process = require('child_process');
+const mkdirp = require('mkdirp');
+const rimraf = require('rimraf');
+
+const HELP = `
+  Usage:
+
+    npls <packages...> [-- npm-ls-args]
+
+  Arguments:
+
+    packages     list of packages to be installed temporarily  (requires)
+                 paths to local packages are not supported
+    npm-ls-args  arguments passed to npm-ls                    (optional)
+
+  Description:
+
+    npls runs npm-ls in a temporal folder where specified packages are
+    installed.
+
+    The temporal folder is deleted together with installed packages before the
+    process exits.
+
+  Examples:
+
+    $ npls chalk
+    npls-17406@1.0.0 $TMPDIR/npls-17406
+    └─┬ chalk@2.4.1
+      ├─┬ ansi-styles@3.2.1
+      │ └─┬ color-convert@1.9.2
+      │   └── color-name@1.1.1
+      ├── escape-string-regexp@1.0.5
+      └─┬ supports-color@5.4.0
+        └── has-flag@3.0.0
+
+    $ npls nyc -- source-map
+    npls-17495@1.0.0 $TMPDIR/npls-17495
+    └─┬ nyc@12.0.2
+      ├─┬ istanbul-lib-instrument@2.3.2
+      │ └─┬ @babel/generator@7.0.0-beta.51
+      │   └── source-map@0.5.7
+      ├─┬ istanbul-lib-source-maps@1.2.5
+      │ └── source-map@0.5.7
+      ├─┬ istanbul-reports@1.4.1
+      │ └─┬ handlebars@4.0.11
+      │   ├── source-map@0.4.4
+      │   └─┬ uglify-js@2.8.29
+      │     └── source-map@0.5.7  deduped
+      ├─┬ merge-source-map@1.1.0
+      │ └── source-map@0.6.1
+      └─┬ micromatch@3.1.10
+        └─┬ snapdragon@0.8.2
+          └── source-map@0.5.7  deduped
+
+    $ npls mkdirp rimraf -- --json
+    {
+      "name": "npls-17540",
+      "version": "1.0.0",
+      "dependencies": {
+        "mkdirp": {
+          "version": "0.5.1",
+          "from": "mkdirp",
+          "resolved": "https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.1.tgz",
+          "dependencies": {
+            "minimist": {
+              "version": "0.0.8",
+              "from": "minimist@0.0.8",
+              "resolved": "https://registry.npmjs.org/minimist/-/minimist-0.0.8.tgz"
+            }
+          }
+        },
+    ...
+`;
+
+const TMPDIR = fs.realpathSync(os.tmpdir());
+
+main(process.argv.slice(2));
+
+function help(code) {
+  console.log(HELP);
+  process.exit(code);
+}
+
+async function main(cmdArgs) {
+  const minimist = require('minimist');
+  const argv = minimist(cmdArgs, { '--': true });
+  if (argv.h || argv.help) {
+    help(0);
+  }
+  const pkgs = argv['_'];
+  if (pkgs.length === 0) {
+    help(1);
+  }
+  const args = argv['--'] ? argv['--'] : [];
+  try {
+    console.log(await npls(pkgs, args));
+  } catch (error) {
+    console.error(error.message);
+  }
+}
+
+function makeWorkdir() {
+  const workdir = path.join(TMPDIR, `npls-${process.pid}`);
+  if (fs.existsSync(workdir)) {
+    rimraf.sync(workdir);
+  }
+  mkdirp.sync(workdir);
+  process.on('exit', () => rimraf.sync(workdir));
+  return workdir;
+}
+
+function spawnNpm(cmd, args, opts) {
+  const proc = child_process.spawn('npm', [cmd].concat(args), opts);
+  const promise = new Promise((resolve, reject) => {
+    let stdout = '';
+    if (proc.stdout) {
+      proc.stdout.setEncoding('utf8');
+      proc.stdout.on('data', (data) => stdout = stdout + data);
+    }
+    proc.on('error', reject);
+    proc.on('exit', (code) => {
+      if (code === 0) {
+        resolve({ stdout });
+      } else {
+        const err = new Error(`\`npm ${cmd}\` existed with code ${code}`);
+        err.code = code;
+        reject(err);
+      }
+    });
+  });
+  return promise;
+}
+
+async function npls(pkgs, args) {
+  const workdir = makeWorkdir();
+  const execOpt = { cwd: workdir };
+
+  await spawnNpm(
+    'init', ['-y'],
+    { cwd: workdir, stdio: 'ignore' });
+
+  const INSTALL_OPTS = [
+    '--silent',    // eliminates error and warning messages
+    '--no-audit',
+    '--no-pckage-lock'
+  ];
+  await spawnNpm(
+    'install', INSTALL_OPTS.concat(pkgs),
+    { cwd: workdir, stdio: ['ignore', 'ignore', 'inherit'] });
+
+  const { stdout } = await spawnNpm(
+    'ls', args,
+    { cwd: workdir, stdio: ['ignore', 'pipe', 'ignore'] });
+
+  return stdout.trim().replace(new RegExp(TMPDIR, 'g'), '$TMPDIR');
+}
