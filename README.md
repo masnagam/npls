@@ -1,6 +1,8 @@
-# npls
+# @masnagam/npls
 
 > Run npm-ls anytime, anywhere
+
+[![npm version](https://badge.fury.io/js/%40masnagam%2Fnpls.svg)](https://badge.fury.io/js/%40masnagam%2Fnpls)
 
 See help shown by `npls -h` for details.
 
